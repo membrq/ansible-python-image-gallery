@@ -1,0 +1,119 @@
+---
+- hosts: localhost
+  gather_facts: no
+  vars:
+    ami_id: "ami-026dea5602e368e96"
+    #postgres_user: "postgres"
+    #postgres_pw: "postgres"
+    #image_gallery_user: "image_gallery"
+    #image_gallery_pw: "image_gallery"
+  module_defaults:
+    group/aws:
+      region: "us-east-2"
+  tasks:
+    - include_vars:
+        file: developer/rds-credentials.yaml 
+    - name:
+      rds_subnet_group:
+        name: rds-subnet-group
+        description: Subnet group for RDS
+        subnets: "{{ private_sn_ids }}"
+        state: present
+    - name: Create postgresql instance
+      rds_instance:
+        #command: create
+        #instance_name: new-database
+        engine: postgres
+        allow_major_version_upgrade: yes
+        allocated_storage: 20
+        max_allocated_storage: 50
+        apply_immediately: yes
+        db_instance_identifier: ansible-db
+        db_instance_class: db.t2.micro
+        db_name: users
+        db_subnet_group_name: rds-subnet-group
+        vpc_security_group_ids: ["{{ m5_ig_sg_id }}", "{{ m5_ig_postgres_sg_id }}"]
+        #master_username: "{{ postgres_user }}"
+        master_username: postgres
+        master_user_password: postgres
+        #master_user_password: "{{ postgres_pw }}"
+        port: 5432
+        publicly_accessible: no
+        #endpoint: TBD
+        state: present
+      register: ig_rds
+    - name: debug
+      debug: var=ig_rds
+    - set_fact:
+        rds_host: "{{ ig_rds.endpoint.address }}"
+    #- create ec2 staging instance
+    - name: Create EC2 staging
+      ec2:
+        key_name: auburnccmzm
+        instance_type: t3.micro
+        wait: yes
+        image: "{{ ami_id }}"
+        vpc_subnet_id: "{{ public_sn_id }}"
+        assign_public_ip: yes
+        instance_tags:
+          Name: m5-ig-staging
+          Test: staging
+        count_tag:
+          Name: m5-ig-staging
+        exact_count: 1
+        group_id: ["{{ m5_ig_sg_id }}","{{ m5_ig_postgres_sg_id }}", "{{ m5_ig_postgres_tag_sg_id }}"]
+        user_data: "{{ lookup('file', 'staging_user_data.sh') }}"
+      register: m5_ig_staging
+    - set_fact:
+        ig_staging_ip: "{{ m5_ig_staging.instances[0].public_ip if m5_ig_staging.instances else m5_ig_staging.tagged_instances[0].public_ip}}"
+        ig_staging_instance_id: "{{ m5_ig_staging.instances[0].id if m5_ig_staging.instances else m5_ig_staging.tagged_instances[0].id}}"
+    - add_host:
+        name: "{{ ig_staging_ip }}"
+        group: m5_ig_staging
+        #hostname: "{{ rds_host }}"
+        ansible_ssh_extra_args: '-0 StrictHostKeyChecking=no'
+        ansible_user: ec2-user
+        ansible_python_interpreter: /usr/bin/python3
+    - name: Wait for SSH
+      wait_for:
+        port: 22
+        host: "{{ ig_staging_ip }}"
+        delay: 30
+    - set_fact:
+        postgres_secret: {'username': '{{ postgres_user }}', 'password': '{{ postgres_pw }}', 'host': '{{ rds_host }}'}
+        image_gallery_secret: {'username': '{{ image_gallery_user }}', 'password': '{{ image_gallery_pw }}', 'host': '{{ rds_host }}'}
+    - name: Create postgres secret
+      aws_secret:
+        name: sec-pg-pw
+        secret: "{{ postgres_secret | to_json }}"
+        secret_type: string
+        state: present
+    - name: Create image gallery secret
+      aws_secret:
+        name: sec-ig-pw
+        secret: "{{ image_gallery_secret | to_json }}"
+        secret_type: string
+        state: present
+    #create ig staging instance
+    #- hosts: m5_ig_staging
+    #  become: yes
+    #  user: ec2-user
+    #  gather_facts: no
+    #  vars:
+    #    ig_rds: "{{ hostvars['localhost']['ig_rds'] }}"
+    #  module_defaults:
+    ##    group/aws:
+    #     region: "us-east-2"
+    # tasks:
+    #   - include_vars:
+    #       file: developer/rds-credentials.yaml 
+    #    #- name: Install packages
+    #    #  package:
+    #    #    name:
+    #    #      - postgresql
+    #    #      - postgresql-devel
+    #    #      - psycopg2
+    #    #- name: Wait for dependencies
+    #    #  wait_for:
+    #    #    path: /var/log/cloud-init-output.log
+    #    #    search_regex: STAGING_READY

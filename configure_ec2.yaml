@@ -1,0 +1,21 @@
+---
+- hosts: tag_Name_m5_ig_staging
+  user: ec2-user
+  become: true
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  tasks:
+    - include_vars:
+        file: developer/rds-credentials.yaml 
+    - name: Create IG role
+      postgresql_user:
+        login_host: "{{ rds_host }}"
+        login_user: "{{ postgres_user }}"
+        login_password: "{{ postgres_pw }}"
+        name: "{{ image_gallery_user }}"
+        password: "{{ image_gallery_pw }}"
+        encrypted: yes
+        db: users
+        priv: ALL
+        role_attr_flags: LOGIN, CREATEDB, CREATEROLE
+  

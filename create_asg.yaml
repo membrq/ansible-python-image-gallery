@@ -1,0 +1,66 @@
+---
+- hosts: localhost
+  vars:
+    ami_id: "ami-026dea5602e368e96"
+  module_defaults:
+    group/aws:
+      region: "us-east-2"
+  tasks:
+    - name: Create an ec2 launch template
+      ec2_launch_template:
+        name: "ig-lt"
+        image_id: "{{ ami_id }}"
+        key_name: auburnccmzm
+        instance_type: t3.micro
+        iam_instance_profile:  image-gallery-server-role
+        #user_data: "{{ lookup('file', 'user_data.sh') | b64encode }}"
+        user_data: "{{ lookup('file', 'startup.sh') | b64encode }}"
+        network_interfaces:
+          - device_index: 0
+            groups: ["{{ m5_nginx_servers_sg_id }}", "{{ m5_ig_sg_id }}","{{ m5_ig_postgres_sg_id }}", "{{ m5_ig_postgres_tag_sg_id }}"]
+            description: Interface for launch template
+            subnet_id: "{{ public_sn_id }}"
+            associate_public_ip_address: yes 
+        state: present
+      register: ig_lt
+    - name: Create target group
+      elb_target_group:
+        name: m5-ig-target-group
+        protocol: TCP
+        port: 80
+        vpc_id: "{{ vpc.vpc.id }}"
+        target_type: instance
+        stickiness_enabled: no
+        stickiness_type: source_ip
+        state: present
+        wait: yes #
+      register: ig_tg
+    - name: Create network load balancer
+      elb_network_lb:
+        name: m5-ig-nlb
+        subnets: "{{ public_sn_id }}"
+        scheme: internet-facing
+        listeners:
+          - Protocol: TCP
+            Port: 80
+            DefaultActions:
+              - Type: forward
+                TargetGroupName: "{{ ig_tg.target_group_name }}"
+        state: present
+    - name: Create auto scaling group
+      ec2_asg:
+        name: m5-ig-asg
+        #load_balancers: TBD
+        #availability_zones: ['us-east-2a', 'us-east-2b']
+        #launch_config_name:
+        launch_template: {'launch_template_name': 'ig-lt'}
+        target_group_arns: ["{{ ig_tg.target_group_arn }}"]
+        #health_check_period: 300 #
+        #health_check_type: ELB #
+        min_size: 2
+        max_size: 4
+        desired_capacity: 2
+        vpc_zone_identifier: "{{ public_sn_id }}"
+        #assign_public_ip: yes
+        #wait_for_instances: yes #
+        state: present

@@ -1,0 +1,31 @@
+---
+- hosts: localhost
+  gather_facts: no
+  module_defaults:
+    group/aws:
+      region: "us-east-2"
+      bucket: ig.private-data-config2 #or should we use new bucket?
+  tasks:
+  - name: Create S3 bucket
+    aws_s3:
+      mode: create
+  - name: Add boot script
+    aws_s3:
+      mode: put
+      object: ec2-prod-1.0.sh
+      src: config/ec2-prod-1.0.sh
+  - name: Add latest boot script
+    aws_s3:
+      mode: put
+      object: ec2-prod-latest.sh
+      src: config/ec2-prod-latest.sh
+  - name: Add nginx config file
+    aws_s3:
+      mode: put
+      object: /nginx/nginx.conf
+      src: config/nginx/nginx.conf
+  - name: Add default.d config fle
+    aws_s3:
+      mode: put
+      object: /nginx/default.d/image_gallery.conf
+      src: config/nginx/default.d/image_gallery.conf

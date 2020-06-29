@@ -1,0 +1,9 @@
+---
+- import_playbook: create_vpc.yaml
+- import_playbook: create_sg.yaml
+- import_playbook: create_rds.yaml
+- import_playbook: create_s3.yaml
+- import_playbook: create_asg.yaml
+- import_playbook: update_rds.yaml
+
+#- import_playbook: create_ec2.yaml

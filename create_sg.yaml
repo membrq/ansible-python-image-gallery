@@ -1,0 +1,151 @@
+---
+- hosts: localhost
+  vars:
+    ami_id: "ami-026dea5602e368e96"
+  module_defaults:
+    group/aws:
+      region: "us-east-2"
+  tasks:
+    #- name: Create default security group
+    #  ec2_group:
+    #    name: m5-default-sg
+    #    description: Default security group for VPC
+    #    vpc_id: "{{ vpc.vpc.id }}"
+    #    rules:
+    #      - proto: tcp
+     #       ports: all
+     #       cidr_ip: 0.0.0.0/0
+     #       rule_desc: Allow all inbound traffic
+     #   state: present
+    #  register: m5_default_sg
+    - name: Create nginx-servers security group #is this sec group needed?
+      ec2_group:
+        name: m5-nginx-servers-sg
+        description: nginx servers security group
+        vpc_id: "{{ vpc.vpc.id }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 22
+              - 80
+              #- 443
+            cidr_ip: 0.0.0.0/0
+        tags:
+          Name: m5-ig-nginx    
+    #        to_port: 22
+    #        cidr_ip: 0.0.0.0/0
+    #        rule_desc: Allow all to port 22
+    #      - proto: tcp
+    #        from_port: 80
+    #        to_port: 80
+    #        cidr_ip: 0.0.0.0/0
+    #        rule_desc: Allow all to port 80
+        state: present
+      register: m5_nginx_servers_sg
+    - name: Create ig security group
+      ec2_group:
+        name: m5-ig-sg
+        description: ig security group
+        vpc_id: "{{ vpc.vpc.id }}"
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+            rule_desc: Allow all to port 22
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 76.204.247.153/32
+            rule_desc: Allow traffic from IP address to port 80
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 24.196.25.139/32
+            rule_desc: Allow traffic from IP address to port 80
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 24.239.105.213/32
+            rule_desc: Allow traffic from IP address to port 80
+          - proto: tcp
+            from_port: 443
+            to_port: 443
+            cidr_ip: 76.204.247.153/32
+            rule_desc: Allow traffic from IP address to port 443
+          - proto: tcp
+            from_port: 443
+            to_port: 443
+            cidr_ip: 24.196.25.139/32
+            rule_desc: Allow traffic from IP address to port 443
+          - proto: tcp
+            from_port: 443
+            to_port: 443
+            cidr_ip: 24.239.105.213/32
+            rule_desc: Allow traffic from IP address to port 443
+        rules_egress:
+          - proto: all
+            from_port: 0
+            to_port: 0
+            cidr_ip: 0.0.0.0/0
+        state: present
+      register: m5_ig_sg
+    - name: Create ig-postgres security group
+      ec2_group:
+        name: m5-ig-postgres-sg
+        description: ig postgres security group
+        vpc_id: "{{vpc.vpc.id}}"
+        #rules:
+        #  - proto: tcp
+        #    from_port: 5432
+        #    to_port: 5432
+        #    group_id: "{{ m5_ig_postgres_tag_sg.group_id}}"
+            #how to set source as ig-postgress-tag-sg?
+            #cidr_ip: 0.0.0.0/0
+        #    rule_desc: Allow inbound traffic to port 5432
+        state: present
+      register: m5_ig_postgres_sg
+    - set_fact:
+        m5_ig_postgres_sg_id: "{{ m5_ig_postgres_sg.group_id }}"
+        m5_ig_sg_id: "{{ m5_ig_sg.group_id }}"
+        m5_nginx_servers_sg_id: "{{ m5_nginx_servers_sg.group_id }}"
+    - name: Create ig-postgres-tag security group
+      ec2_group:
+        name: m5-ig-postgres-tag-sg
+        description: ig postgres tag security group
+        vpc_id: "{{vpc.vpc.id}}"
+        rules:
+          - proto: tcp
+            from_port: 5432
+            to_port: 5432
+            group_id: "{{ m5_ig_postgres_sg.group_id}}"
+          #  cidr_ip: 0.0.0.0/0
+            rule_desc: Allow inbound traffic to port 5432
+        rules_egress:
+          - proto: tcp
+            from_port: 5432
+            to_port: 5432
+            #cidr_ip: 0.0.0.0/0
+            rule_desc: Allow outgoing traffic to port 5432
+            group_id: "{{ m5_ig_postgres_sg.group_id}}"
+        state: present
+      register: m5_ig_postgres_tag_sg
+    - name: Modify tag group to accept 5432 traffic
+      ec2_group:
+        name: m5-ig-postgres-sg
+        description: Incoming traffic to 5432
+        vpc_id: "{{vpc.vpc.id}}"
+        rules:
+          - proto: tcp
+            from_port: 5432
+            to_port: 5432
+            group_id: "{{ m5_ig_postgres_tag_sg.group_id }}"
+            rule_desc: Allow inbound traffic to port 5432
+        state: present
+    - set_fact:
+        m5_ig_postgres_tag_sg_id: "{{ m5_ig_postgres_tag_sg.group_id }}"
+
+    #default vpc security group code is in create_vpc.yaml
+
+    ######### testing endpoint tag
+    #- name: Create ig-endpoint
