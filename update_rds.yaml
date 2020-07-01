@@ -4,13 +4,11 @@
   user: ec2-user
   vars:
     ami_id: "ami-026dea5602e368e96"
-    #ansible_python_interpreter: /usr/bin/python3
+    rds_host_final: "{{ lookup('file', 'rds_host_address.txt')}}" 
   module_defaults:
     group/aws:
       region: "us-east-2"
   tasks:
-  #- name: debug
-  #  debug: var=ig_rds   
   - include_vars:
       file: developer/rds-credentials.yaml 
   - name: Install packages
@@ -20,8 +18,7 @@
         - python-psycopg2
   - name: Create IG role
     postgresql_user:
-      login_host: "ansible-db.czsoki4ydlhy.us-east-2.rds.amazonaws.com"
-      #login_host: "{{ rds_host }}"
+      login_host: "{{ rds_host_final }}" #
       login_user: postgres
       login_password: postgres
       name: "{{ image_gallery_user }}"
@@ -35,8 +32,7 @@
     postgresql_table:
       login_user: "{{ image_gallery_user }}"
       login_password: "{{ image_gallery_pw }}"
-      login_host: "ansible-db.czsoki4ydlhy.us-east-2.rds.amazonaws.com"
-      #login_host: "{{ rds_host }}"
+      login_host: "{{ rds_host_final }}" #
       owner: "{{ image_gallery_user }}"
       db: users
       table: users
