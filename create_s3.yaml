@@ -4,28 +4,33 @@
   module_defaults:
     group/aws:
       region: "us-east-2"
-      bucket: ig.private-data-config2 #or should we use new bucket?
+      #bucket: ig.private-data-config2
   tasks:
   - name: Create S3 bucket
     aws_s3:
       mode: create
+      bucket: ig.private-data-config2
   - name: Add boot script
     aws_s3:
       mode: put
       object: ec2-prod-1.0.sh
       src: config/ec2-prod-1.0.sh
+      bucket: ig.private-data-config2
   - name: Add latest boot script
     aws_s3:
       mode: put
       object: ec2-prod-latest.sh
       src: config/ec2-prod-latest.sh
+      bucket: ig.private-data-config2
   - name: Add nginx config file
     aws_s3:
       mode: put
       object: /nginx/nginx.conf
       src: config/nginx/nginx.conf
+      bucket: ig.private-data-config2
   - name: Add default.d config fle
     aws_s3:
       mode: put
       object: /nginx/default.d/image_gallery.conf
       src: config/nginx/default.d/image_gallery.conf
+      bucket: ig.private-data-config2
